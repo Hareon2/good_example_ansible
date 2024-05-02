@@ -1,0 +1,43 @@
+- name: Configure SSH with Mozilla settings
+  blockinfile:
+    path: /etc/ssh/sshd_config
+    block: |
+      # Settings from https://infosec.mozilla.org/guidelines/openssh
+      HostKey /etc/ssh/ssh_host_ed25519_key
+      HostKey /etc/ssh/ssh_host_rsa_key
+      HostKey /etc/ssh_host_ecdsa_key
+      KexAlgorithms curve25519-sha256,ecdh-sha2-nistp256
+      Ciphers chacha20-poly1305,aes256-gcm,aes128-gcm
+      MACs hmac-sha2-512,hmac-sha2-256
+      LogLevel VERBOSE
+      UsePrivilegeSeparation sandbox
+  notify: restart ssh
+
+- name: secure ssh configuration part 2
+  become: true
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    loop:
+    - {regexp: '^AllowGroups', line: 'AllowGroups sshusers'}
+    - {regexp: '^ClientAliveCountMax', line: 'ClientAliveCountMax 0'}
+    - {regexp: '^ClientAliveInterval', line: 'ClientAliveInterval 300'}
+    - {regexp: '^ListenAddress', line: 'ListenAddress 0.0.0.0'}
+    - {regexp: '^LoginGraceTime', line: 'LoginGraceTime 30'}
+    - {regexp: '^MaxAuthTries', line: 'MaxAuthTries 2'}
+    - {regexp: '^MaxSessions', line: 'MaxSessions 2'}
+    - {regexp: '^MaxStartups', line: 'MaxStartups 2'}
+    - {regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no'}
+    - {regexp: '^Port', line: 'Port {{ ssh_port }}'}
+    - {regexp: '^PermitRootLogin', line: 'PermitRootLogin no'}
+    - {regexp: '^X11Forwarding', line: 'X11Forwarding no'}
+    - {regexp: '^Subsystem', line: 'Subsystem sftp  internal-sftp -f AUTHPRIV -l INFO'}
+    notify: restart ssh service
+
+- name: remove short diffie diffie-hellman
+  become: true
+  shell: |
+    awk '$5 >= 3071' /etc/ssh/moduli | sudo tee /etc/ssh/moduli.tmp
+    mv /etc/ssh/moduli.tmp /etc/ssh/moduli
+  notify: restart ssh service

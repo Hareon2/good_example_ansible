@@ -1,0 +1,41 @@
+# ansible\roles\requirements\tasks\main.yml
+
+- name: Create groups
+  group:
+    name: "{{ item }}"
+  loop:
+  - sshusers
+  - sudousers
+  - suusers
+
+- name: Create new user
+  user:
+    name: "{{ user }}"
+    groups: "sshusers,sudousers,suusers"
+    append: yes
+
+- name: Limit sudo usage to sudousers group
+  lineinfile:
+    dest: /etc/sudoers
+    regexp: '^%sudousers'
+    line: '%sudousers ALL=(ALL:ALL) ALL'
+
+- name: Limit su usage to suusers group
+  lineinfile:
+    dest: /etc/pam.d/su
+    regexp: '^#auth\s+required\s+pam_wheel.so\s+use_uid'
+    line: 'auth            required        pam_wheel.so use_uid group=suusers'
+    state: present
+
+- name: Enable passwordless sudo for the new user
+  lineinfile:
+    dest: /etc/sudoers
+    regexp: '^{{ user }}\s'
+    line: "{{ user }} ALL=(ALL) NOPASSWD: ALL"
+    validate: "/usr/sbin/visudo -cf %s"
+
+- name: Add SSH public key to authorized_keys
+  authorized_key:
+    user: "{{ user }}"
+    state: present
+    key: "{{ ssh_public_key }}"

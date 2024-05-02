@@ -1,0 +1,12 @@
+deploy:
+  app_path: /opt/react-sneakers/
+  user: noteadmin
+  password: noteadmin
+user: ubuntu
+
+
+sshpub_location: SSH_PUBKEY_HERE #the full path to your SSH public key ( e.g. /Users/username/.ssh/id_ed25519.pub )
+root_pw: "PASSWORD_HERE" #root password that should be set
+user_name: USERNAME_HERE #username for the created user
+user_pw: "PASSWORD_HERE" #password for the new user
+ssh_port: 55899 #port number for ssh

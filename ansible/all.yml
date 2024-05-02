@@ -1,0 +1,4 @@
+- name: preconfig
+  hosts: WEB_SERVER
+  roles:
+  - preconfig

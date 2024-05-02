@@ -1,0 +1,144 @@
+- name: Grant primary user sudo privileges
+  become: true
+  user:
+    name: "{{ user }}"
+    append: yes
+    groups: sudo
+
+- name: Update apt
+  become: true
+  apt:
+    update_cache: yes
+    cache_valid_time: 86400
+
+- name: Install necessary packages
+  become: true
+  apt:
+    state: latest
+    package:
+    - ufw
+    - fail2ban
+    - unattended-upgrades
+
+- name: Set up unattended upgrades
+  become: true
+  copy:
+    src: ../files/apt_periodic
+    dest: /etc/apt/apt.conf.d/10periodic
+
+- name: Automatically remove unused dependencies
+  become: true
+  lineinfile:
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: "Unattended-Upgrade::Remove-Unused-Dependencies"
+    line: "Unattended-Upgrade::Remove-Unused-Dependencies \"true\";"
+    state: present
+    create: yes
+
+- name: UFW allow SSH traffic
+  become: true
+  ufw:
+    rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+
+- name: UFW allow HTTP traffic
+  become: true
+  ufw:
+    rule: allow
+    port: 80
+    proto: tcp
+
+- name: UFW allow HTTPS traffic
+  become: true
+  ufw:
+    rule: allow
+    port: 443
+    proto: tcp
+
+- name: UFW deny everything else
+  become: true
+  ufw:
+    state: enabled
+    policy: deny
+
+- name: Set up fail2ban
+  become: true
+  copy:
+    src: ../files/fail2ban_jail.conf
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+  - restart fail2ban
+
+- name: Check su access
+  become: true
+  command: dpkg-statoverride --list /bin/su
+  register: su_statoverride
+  changed_when: false
+  failed_when: false
+
+- name: Remove existing su access override
+  become: true
+  command: dpkg-statoverride --remove /bin/su
+  when: su_statoverride.stdout and su_statoverride.stdout != "root sudo 4750 /bin/su"
+
+- name: Limit su access to sudo group
+  become: true
+  command: dpkg-statoverride --update --add root sudo 4750 /bin/su
+  when: not su_statoverride.stdout or su_statoverride.stdout != "root sudo 4750 /bin/su"
+
+- name: Secure shared memory
+  become: true
+  lineinfile:
+    dest: /etc/fstab
+    regexp: "/run/shm"
+    line: "none     /run/shm     tmpfs     defaults,noexec,nosuid,nodev     0     0"
+    state: present
+    backrefs: yes
+
+- name: Disallow password authentication
+  become: true
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    state: present
+  notify: restart ssh
+
+- name: Allow SSH only for primary user
+  become: true
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^AllowUsers"
+    line: "AllowUsers {{ user }}"
+    state: present
+  notify: restart ssh
+
+- name: Disallow root SSH access
+  become: true
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  notify: restart ssh
+
+- name: Set SSH port
+  become: true
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^Port\\s"
+    line: "Port {{ ssh_port }}"
+    state: present
+  notify: restart ssh
+
+- name: Set ownership and permissions for fail2ban jail.local
+  become: true
+  file:
+    path: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
