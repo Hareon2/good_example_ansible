@@ -1,4 +1,4 @@
 - name: preconfig
-  hosts: WEB_SERVER
+  hosts: worker1
   roles:
   - preconfig
